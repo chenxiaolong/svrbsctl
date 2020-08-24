@@ -1,0 +1,12 @@
+[package]
+name = "svrbsctl"
+version = "0.1.0"
+authors = ["Andrew Gunnerson <chillermillerlong@hotmail.com>"]
+edition = "2018"
+
+[dependencies]
+cancellable-timer = "0.1.0"
+clap = "3.0.0-beta.1"
+lazy_static = "1.4.0"
+thiserror = "1.0.20"
+winrt = "0.7.2"
