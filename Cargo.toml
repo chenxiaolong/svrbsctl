@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 cancellable-timer = "0.1.0"
-clap = "3.0.0-beta.1"
+clap = "3.0.0-beta.2"
 lazy_static = "1.4.0"
-thiserror = "1.0.20"
+thiserror = "1.0.22"
 winrt = "0.7.2"
