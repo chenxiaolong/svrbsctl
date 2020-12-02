@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashSet, HashMap},
     convert::{TryFrom, TryInto},
     fmt,
     time::Duration,
@@ -88,10 +88,15 @@ pub struct BaseStationDevice {
 
 // TODO: Make everything async once winrt-rs has a stable release with async support
 impl BaseStationDevice {
-    pub fn discover(timeout: Duration) -> Result<HashMap<BtAddr, String>> {
+    pub fn discover(
+        timeout: Duration,
+        limit: Option<&[BtAddr]>,
+    ) -> Result<HashMap<BtAddr, String>> {
         // Allow ending the scan early if an error occurs
         let (mut timer, canceller) = Timer::new2()?;
+        let canceller2 = canceller.clone();
         let (tx, rx) = std::sync::mpsc::channel();
+        let mut remaining = limit.map(|d| d.iter().copied().collect::<HashSet<_>>());
 
         {
             let watcher = BluetoothLEAdvertisementWatcher::new()?;
@@ -102,11 +107,34 @@ impl BaseStationDevice {
                     return Ok(());
                 }
 
-                tx.send((event.bluetooth_address()?, name)).unwrap();
+                let addr = BtAddr::from(event.bluetooth_address()?);
+                let (send, cancel) = match &mut remaining {
+                    Some(r) => (r.remove(&addr), r.is_empty()),
+                    None => (true, false),
+                };
+
+                if send {
+                    let device = BluetoothLEDevice::from_bluetooth_address_async(addr.into())?.get()?;
+                    if device.is_null() {
+                        return Ok(());
+                    }
+
+                    let services = device.get_gatt_services_for_uuid_async(
+                        crate::constants::SERVICE_GUID.clone())?.get()?;
+                    if services.services()?.size()? == 0 {
+                        return Ok(());
+                    }
+
+                    tx.send((addr, name)).unwrap();
+                }
+                if cancel {
+                    canceller.cancel().unwrap();
+                }
+
                 Ok(())
             }))?;
             watcher.stopped(StoppedHandler::new(move |_, _| {
-                canceller.cancel().unwrap();
+                canceller2.cancel().unwrap();
                 Ok(())
             }))?;
 
@@ -124,25 +152,7 @@ impl BaseStationDevice {
 
         // tx is dropped when watcher is dropped
 
-        let addrs: HashMap<u64, String> = rx.iter().collect();
-        let mut result = HashMap::new();
-
-        for (addr, name) in addrs {
-            let device = BluetoothLEDevice::from_bluetooth_address_async(addr)?.get()?;
-            if device.is_null() {
-                continue;
-            }
-
-            let services = device.get_gatt_services_for_uuid_async(
-                crate::constants::SERVICE_GUID.clone())?.get()?;
-            if services.services()?.size()? == 0 {
-                continue;
-            }
-
-            result.insert(addr.into(), name);
-        }
-
-        Ok(result)
+        Ok(rx.iter().collect())
     }
 
     pub fn connect(addr: BtAddr) -> Result<Self> {

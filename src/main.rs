@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use clap::Clap;
+use thiserror::Error;
 
 use bluetooth::BtAddr;
 use device::{BaseStationDevice, PowerState};
-use error::Result;
 
 mod bluetooth;
 mod constants;
@@ -48,12 +48,15 @@ impl From<ArgPowerState> for PowerState {
 struct Opts {
     #[clap(subcommand)]
     subcommand: Subcommand,
+    /// Bluetooth scanning timeout (in seconds)
+    #[clap(short, long, default_value = "3")]
+    timeout: u64,
 }
 
 #[derive(Clap)]
 enum Subcommand {
     /// Discover SteamVR base stations
-    Discover(CommandDiscover),
+    Discover,
     /// Get state of base station
     ///
     /// The current channel and power state can be queried, but the 'identify'
@@ -61,13 +64,6 @@ enum Subcommand {
     Get(CommandGet),
     /// Set state of base station
     Set(CommandSet),
-}
-
-#[derive(Clap)]
-struct CommandDiscover {
-    /// Bluetooth scanning timeout (in seconds)
-    #[clap(short, long, default_value = "3")]
-    timeout: u64,
 }
 
 #[derive(Clap)]
@@ -133,86 +129,105 @@ struct CommandSetPower {
     addrs: Vec<BtAddr>,
 }
 
-fn main() {
+#[derive(Error, Debug)]
+enum MainError {
+    #[error("{0}")]
+    Global(error::Error),
+    #[error("[{0}] {1}")]
+    Device(BtAddr, error::Error),
+    #[error("Some devices were not found")]
+    MissingDevices,
+}
+
+fn main_wrapper() -> Result<(), MainError> {
     let opts = Opts::parse();
-    let mut failed = false;
-    let mut handle_result = |result, addr| {
-        match result {
-            Ok(_) => {},
-            Err(e) => {
-                if let Some(a) = addr {
-                    eprint!("[{}] ", a);
-                }
-                eprintln!("{}", e);
-                failed = true;
-            },
+    let timeout = Duration::from_secs(opts.timeout);
+    let limit = match &opts.subcommand {
+        Subcommand::Discover => None,
+        Subcommand::Get(args) => Some(&args.addrs),
+        Subcommand::Set(args) => {
+            match &args.subcommand {
+                SubcommandSet::Channel(sargs) => Some(&sargs.addrs),
+                SubcommandSet::Identify(sargs) => Some(&sargs.addrs),
+                SubcommandSet::Power(sargs) => Some(&sargs.addrs),
+            }
+        },
+    }.map(|l| l.as_slice());
+    let devices = BaseStationDevice::discover(timeout, limit)
+        .map_err(MainError::Global)?;
+    let mut missing = false;
+
+    if let Some(l) = limit {
+        if devices.len() < l.len() {
+            for addr in l.iter().filter(|d| !devices.contains_key(d)) {
+                eprintln!("[{}] Could not find device", addr);
+            }
+            missing = true;
         }
+    }
+
+    let device_error = move |addr| {
+        move |e| MainError::Device(addr, e)
     };
 
-    match opts.subcommand {
-        Subcommand::Discover(args) => {
-            let duration = Duration::from_secs(args.timeout);
-
-            handle_result(|| -> Result<()> {
-                let devices = BaseStationDevice::discover(duration)?;
-                for (addr, name) in devices {
-                    println!("{}={}", addr, name);
-                }
-                Ok(())
-            }(), None);
+    match &opts.subcommand {
+        Subcommand::Discover => {
+            for (addr, name) in devices {
+                println!("{}={}", addr, name);
+            }
         }
         Subcommand::Get(args) => {
-            for addr in &args.addrs {
-                handle_result(|| -> Result<()> {
-                    let device = BaseStationDevice::connect(*addr)?;
+            for addr in devices.keys() {
+                let device = BaseStationDevice::connect(*addr)
+                    .map_err(device_error(*addr))?;
 
-                    match args.state_type {
-                        GetStateType::Channel => {
-                            println!("{}={}", addr, device.get_channel()?);
-                        }
-                        GetStateType::Power => {
-                            println!("{}={}", addr, device.get_power_state()?);
-                        }
+                match args.state_type {
+                    GetStateType::Channel => {
+                        let channel = device.get_channel()
+                            .map_err(device_error(*addr))?;
+                        println!("{}={}", addr, channel);
                     }
-
-                    Ok(())
-                }(), Some(addr));
+                    GetStateType::Power => {
+                        let state = device.get_power_state()
+                            .map_err(device_error(*addr))?;
+                        println!("{}={}", addr, state);
+                    }
+                }
             }
         }
         Subcommand::Set(args) => {
-            match args.subcommand {
-                SubcommandSet::Channel(sargs) => {
-                    for addr in &sargs.addrs {
-                        handle_result(|| -> Result<()> {
-                            let device = BaseStationDevice::connect(*addr)?;
-                            device.set_channel(sargs.channel)?;
-                            Ok(())
-                        }(), Some(addr));
+            for addr in devices.keys() {
+                let device = BaseStationDevice::connect(*addr)
+                    .map_err(device_error(*addr))?;
+
+                match &args.subcommand {
+                    SubcommandSet::Channel(sargs) => {
+                        device.set_channel(sargs.channel)
                     }
-                }
-                SubcommandSet::Identify(sargs) => {
-                    for addr in &sargs.addrs {
-                        handle_result(|| -> Result<()> {
-                            let device = BaseStationDevice::connect(*addr)?;
-                            device.set_identify(sargs.state.into())?;
-                            Ok(())
-                        }(), Some(addr));
+                    SubcommandSet::Identify(sargs) => {
+                        device.set_identify(sargs.state.into())
                     }
-                }
-                SubcommandSet::Power(sargs) => {
-                    for addr in &sargs.addrs {
-                        handle_result(|| -> Result<()> {
-                            let device = BaseStationDevice::connect(*addr)?;
-                            device.set_power_state(sargs.state.into())?;
-                            Ok(())
-                        }(), Some(addr));
+                    SubcommandSet::Power(sargs) => {
+                        device.set_power_state(sargs.state.into())
                     }
-                }
+                }.map_err(device_error(*addr))?;
             }
         }
     }
 
-    if failed {
-        std::process::exit(1);
+    if missing {
+        Err(MainError::MissingDevices)
+    } else {
+        Ok(())
+    }
+}
+
+fn main() {
+    match main_wrapper() {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
     }
 }
