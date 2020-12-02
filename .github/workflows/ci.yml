@@ -1,0 +1,42 @@
+---
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+jobs:
+  build_and_upload:
+    name: Build and archive artifacts
+    runs-on: windows-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Install winmd files
+        run: |
+          cargo install cargo-winrt
+          cargo winrt install
+
+      - name: Install clippy
+        run: rustup component add clippy
+
+      - name: Run clippy checks in debug mode
+        env:
+          RUST_BACKTRACE: 1
+        run: |
+          cargo clippy --workspace -- -D warnings
+
+      - name: Build in debug mode
+        run: cargo build --verbose
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: svrbsctl
+          path: |
+            target/debug/svrbsctl.exe
+            target/debug/svrbsctl.pdb
