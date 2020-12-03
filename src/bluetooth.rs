@@ -15,6 +15,7 @@ impl BtAddr {
 }
 
 impl fmt::Display for BtAddr {
+    #[allow(clippy::erasing_op, clippy::identity_op)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
