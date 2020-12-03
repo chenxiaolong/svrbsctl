@@ -10,7 +10,7 @@ mod bluetooth;
 mod constants;
 mod device;
 mod error;
-#[allow(dead_code)]
+#[allow(dead_code, clippy::all)]
 mod wrap;
 
 #[derive(Clap, Clone, Copy, Eq, PartialEq)]
