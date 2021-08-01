@@ -1,35 +1,14 @@
 use std::{
-    collections::{HashSet, HashMap},
     convert::{TryFrom, TryInto},
     fmt,
-    time::Duration,
 };
 
-use cancellable_timer::Timer;
-use winrt::{ComInterface, Guid};
-
-use crate::{
-    bluetooth::BtAddr,
-    error::{Error, Result},
-    wrap::{
-        ReceivedHandler,
-        StoppedHandler,
-        windows::{
-            devices::bluetooth::{
-                advertisement::{
-                    BluetoothLEAdvertisementWatcher,
-                    BluetoothLEScanningMode,
-                },
-                BluetoothLEDevice,
-                generic_attribute_profile::GattCharacteristic,
-            },
-            storage::streams::{
-                DataReader,
-                DataWriter,
-            },
-        },
-    },
+use btleplug::{
+    api::{Characteristic, Peripheral as _, WriteType},
+    platform::Peripheral,
 };
+
+use crate::error::{Error, Result};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum PowerState {
@@ -83,140 +62,72 @@ impl TryFrom<u8> for PowerState {
 
 #[derive(Debug)]
 pub struct BaseStationDevice {
-    device: BluetoothLEDevice,
+    peripheral: Peripheral,
+    c_identify: Characteristic,
+    c_mode: Characteristic,
+    c_power: Characteristic,
 }
 
-// TODO: Make everything async once winrt-rs has a stable release with async support
 impl BaseStationDevice {
-    pub fn discover(
-        timeout: Duration,
-        limit: Option<&[BtAddr]>,
-    ) -> Result<HashMap<BtAddr, String>> {
-        // Allow ending the scan early if an error occurs
-        let (mut timer, canceller) = Timer::new2()?;
-        let canceller2 = canceller.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
-        let mut remaining = limit.map(|d| d.iter().copied().collect::<HashSet<_>>());
+    // A fast heuristic to determine if a peripheral is likely a base station
+    // based on the device name. There may be false positives, but there will
+    // never be false negatives.
+    pub fn is_likely_base_station(name: &str) -> bool {
+        name.starts_with(crate::constants::NAME_PREFIX)
+    }
 
-        {
-            let watcher = BluetoothLEAdvertisementWatcher::new()?;
-            watcher.set_scanning_mode(BluetoothLEScanningMode::Active)?;
-            watcher.received(ReceivedHandler::new(move |_, event| {
-                let name = event.advertisement()?.local_name()?.to_string();
-                if !name.starts_with("LHB-") {
-                    return Ok(());
-                }
+    pub async fn connect(peripheral: Peripheral) -> Result<Self> {
+        peripheral.connect().await?;
 
-                let addr = BtAddr::from(event.bluetooth_address()?);
-                let (send, cancel) = match &mut remaining {
-                    Some(r) => (r.remove(&addr), r.is_empty()),
-                    None => (true, false),
-                };
+        peripheral.discover_characteristics().await?;
 
-                if send {
-                    let device = BluetoothLEDevice::from_bluetooth_address_async(addr.into())?.get()?;
-                    if device.is_null() {
-                        return Ok(());
-                    }
+        let mut c_identify = None;
+        let mut c_mode = None;
+        let mut c_power = None;
 
-                    let services = device.get_gatt_services_for_uuid_async(
-                        crate::constants::SERVICE_GUID.clone())?.get()?;
-                    if services.services()?.size()? == 0 {
-                        return Ok(());
-                    }
-
-                    tx.send((addr, name)).unwrap();
-                }
-                if cancel {
-                    canceller.cancel().unwrap();
-                }
-
-                Ok(())
-            }))?;
-            watcher.stopped(StoppedHandler::new(move |_, _| {
-                canceller2.cancel().unwrap();
-                Ok(())
-            }))?;
-
-            watcher.start()?;
-
-            match timer.sleep(timeout) {
-                Err(e) if e.kind() != std::io::ErrorKind::Interrupted => {
-                    return Err(e.into());
-                }
-                _ => {}
+        for c in peripheral.characteristics() {
+            if c.uuid == crate::constants::UUID_CHARACTERISTIC_IDENTIFY {
+                c_identify = Some(c);
+            } else if c.uuid == crate::constants::UUID_CHARACTERISTIC_MODE {
+                c_mode = Some(c);
+            } else if c.uuid == crate::constants::UUID_CHARACTERISTIC_POWER {
+                c_power = Some(c);
             }
-
-            watcher.stop()?;
         }
 
-        // tx is dropped when watcher is dropped
+        let c_identify = c_identify.ok_or(Error::UnknownDevice)?;
+        let c_mode = c_mode.ok_or(Error::UnknownDevice)?;
+        let c_power = c_power.ok_or(Error::UnknownDevice)?;
 
-        Ok(rx.iter().collect())
+        Ok(Self {
+            peripheral,
+            c_identify,
+            c_mode,
+            c_power,
+        })
     }
 
-    pub fn connect(addr: BtAddr) -> Result<Self> {
-        let device = BluetoothLEDevice::from_bluetooth_address_async(addr.into())?.get()?;
-        if device.is_null() {
-            return Err(Error::ConnectionFailed);
-        }
+    async fn read_value(&self, characteristic: &Characteristic) -> Result<u8> {
+        let buf = self.peripheral.read(characteristic).await?;
 
-        Ok(Self { device })
+        buf.into_iter().next().ok_or(Error::EmptyResponse)
     }
 
-    fn get_characteristic(&self, service: &Guid, characteristic: &Guid) -> Result<GattCharacteristic> {
-        let services = self.device.get_gatt_services_for_uuid_async(
-            service.clone())?.get()?.services()?;
-        if services.size()? == 0 {
-            return Err(Error::MissingService(service.clone()));
-        }
-
-        let characteristics = services.get_at(0)?.get_characteristics_for_uuid_async(
-            characteristic.clone())?.get()?.characteristics()?;
-        if characteristics.size()? == 0 {
-            return Err(Error::MissingCharacteristic(
-                service.clone(), characteristic.clone()));
-        }
-
-        Ok(characteristics.get_at(0)?)
-    }
-
-    fn read_value(&self, service: &Guid, characteristic: &Guid) -> Result<u8> {
-        let c = self.get_characteristic(service, characteristic)?;
-        let buffer = c.read_value_async()?.get()?.value()?;
-        let reader = DataReader::from_buffer(buffer)?;
-
-        Ok(reader.read_byte()?)
-    }
-
-    fn write_values(&self, service: &Guid, characteristic: &Guid, values: &[u8]) -> Result<()> {
-        let c = self.get_characteristic(service, characteristic)?;
-
+    async fn write_values(&self, characteristic: &Characteristic, values: &[u8]) -> Result<()> {
         // Each byte is sent as a separate command
         for value in values {
-            let writer = DataWriter::new()?;
-            writer.write_byte(*value)?;
-
-            let buffer = writer.detach_buffer()?;
-            c.write_value_async(buffer)?.get()?;
+            self.peripheral.write(characteristic, &[*value], WriteType::WithoutResponse).await?;
         }
 
         Ok(())
     }
 
-    pub fn set_identify(&self, state: bool) -> Result<()> {
-        self.write_values(
-            &*crate::constants::SERVICE_GUID,
-            &*crate::constants::IDENTIFY_CHARACTERISTIC_GUID,
-            &[state as u8]
-        )
+    pub async fn set_identify(&self, state: bool) -> Result<()> {
+        self.write_values(&self.c_identify, &[state as u8]).await
     }
 
-    pub fn get_channel(&self) -> Result<u8> {
-        let value = self.read_value(
-            &*crate::constants::SERVICE_GUID,
-            &*crate::constants::MODE_CHARACTERISTIC_GUID
-        )?;
+    pub async fn get_channel(&self) -> Result<u8> {
+        let value = self.read_value(&self.c_mode).await?;
 
         if value >= 16 {
             return Err(Error::UnknownChannel(value));
@@ -225,32 +136,21 @@ impl BaseStationDevice {
         Ok(value)
     }
 
-    pub fn set_channel(&self, channel: u8) -> Result<()> {
+    pub async fn set_channel(&self, channel: u8) -> Result<()> {
         if channel >= 16 {
             return Err(Error::UnknownChannel(channel));
         }
 
-        self.write_values(
-            &*crate::constants::SERVICE_GUID,
-            &*crate::constants::MODE_CHARACTERISTIC_GUID,
-            &[channel]
-        )
+        self.write_values(&self.c_mode, &[channel]).await
     }
 
-    pub fn get_power_state(&self) -> Result<PowerState> {
-        let value = self.read_value(
-            &*crate::constants::SERVICE_GUID,
-            &*crate::constants::POWER_CHARACTERISTIC_GUID
-        )?;
+    pub async fn get_power_state(&self) -> Result<PowerState> {
+        let value = self.read_value(&self.c_power).await?;
 
         Ok(value.try_into()?)
     }
 
-    pub fn set_power_state(&self, state: PowerState) -> Result<()> {
-        self.write_values(
-            &*crate::constants::SERVICE_GUID,
-            &*crate::constants::POWER_CHARACTERISTIC_GUID,
-            state.into()
-        )
+    pub async fn set_power_state(&self, state: PowerState) -> Result<()> {
+        self.write_values(&self.c_power, state.into()).await
     }
 }
