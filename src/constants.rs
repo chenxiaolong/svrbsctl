@@ -1,15 +1,32 @@
-use lazy_static::lazy_static;
-use winrt::Guid;
+use uuid::Uuid;
 
 // See: https://gist.github.com/BenWoodford/3a1e500a4ea2673525f5adb4120fd47c
 
-lazy_static! {
-    pub static ref SERVICE_GUID: Guid =
-        Guid::from("00001523-1212-EFDE-1523-785FEABCD124");
-    pub static ref IDENTIFY_CHARACTERISTIC_GUID: Guid =
-        Guid::from("00008421-1212-EFDE-1523-785FEABCD124");
-    pub static ref MODE_CHARACTERISTIC_GUID: Guid =
-        Guid::from("00001524-1212-EFDE-1523-785FEABCD124");
-    pub static ref POWER_CHARACTERISTIC_GUID: Guid =
-        Guid::from("00001525-1212-EFDE-1523-785FEABCD124");
-}
+pub const NAME_PREFIX: &str = "LHB-";
+
+// btleplug currently does not use services
+#[allow(dead_code)]
+pub const UUID_SERVICE: Uuid = Uuid::from_bytes([
+    0x00, 0x00, 0x15, 0x23,
+    0x12, 0x12,
+    0xEF, 0xDE,
+    0x15, 0x23, 0x78, 0x5F, 0xEA, 0xBC, 0xD1, 0x24,
+]);
+pub const UUID_CHARACTERISTIC_IDENTIFY: Uuid = Uuid::from_bytes([
+    0x00, 0x00, 0x84, 0x21,
+    0x12, 0x12,
+    0xEF, 0xDE,
+    0x15, 0x23, 0x78, 0x5F, 0xEA, 0xBC, 0xD1, 0x24,
+]);
+pub const UUID_CHARACTERISTIC_MODE: Uuid = Uuid::from_bytes([
+    0x00, 0x00, 0x15, 0x24,
+    0x12, 0x12,
+    0xEF, 0xDE,
+    0x15, 0x23, 0x78, 0x5F, 0xEA, 0xBC, 0xD1, 0x24,
+]);
+pub const UUID_CHARACTERISTIC_POWER: Uuid = Uuid::from_bytes([
+    0x00, 0x00, 0x15, 0x25,
+    0x12, 0x12,
+    0xEF, 0xDE,
+    0x15, 0x23, 0x78, 0x5F, 0xEA, 0xBC, 0xD1, 0x24,
+]);

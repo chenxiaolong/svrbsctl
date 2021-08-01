@@ -14,6 +14,8 @@ The project can be built by running:
 cargo build --release
 ```
 
+On Linux, the development package for dbus needs to be installed.
+
 To run `svrbsctl`:
 
 ```powershell
@@ -23,10 +25,13 @@ cargo run --release -- <args>
 Alternatively, the executable can be directly run with:
 
 ```powershell
+# Windows
 .\svrbsctl.exe <args>
+# Linux
+./svrbsctl <args>
 ```
 
-The executable is located at `target\release\svrbsctl.exe`. It has no dependencies that aren't shipped with Windows so it can be copied and run from anywhere.
+On Windows, the executable is located at `target\release\svrbsctl.exe`. It has no dependencies that aren't shipped with Windows so it can be copied and run from anywhere. On Linux, the executable is located at `target/release/svrbsctl` and only depends on the C library and dbus.
 
 ## Usage
 
@@ -36,23 +41,23 @@ To discover the available base stations, run the following command. It will prin
 svrbsctl discover
 # Output:
 # 00:11:22:33:44:55=LHB-ABCDEFGH
-# aa:bb:cc:dd:ee:ff=LHB-IJKLMNOP
+# AA:BB:CC:DD:EE:FF=LHB-IJKLMNOP
 ```
 
 The bluetooth addresses can then be used to query the current state:
 
 ```powershell
 # Get current channel
-svrbsctl get channel 00:11:22:33:44:55 aa:bb:cc:dd:ee:ff
+svrbsctl get channel 00:11:22:33:44:55 AA:BB:CC:DD:EE:FF
 # Output:
 # 00:11:22:33:44:55=1
-# aa:bb:cc:dd:ee:ff=2
+# AA:BB:CC:DD:EE:FF=2
 
 # Get power state
-svrbsctl get power 00:11:22:33:44:55 aa:bb:cc:dd:ee:ff
+svrbsctl get power 00:11:22:33:44:55 AA:BB:CC:DD:EE:FF
 # Output:
 # 00:11:22:33:44:55=sleeping
-# aa:bb:cc:dd:ee:ff=sleeping
+# AA:BB:CC:DD:EE:FF=sleeping
 ```
 
 or to set the new state:
@@ -60,11 +65,11 @@ or to set the new state:
 ```powershell
 # Set the RF channels
 svrbsctl set channel 1 00:11:22:33:44:55
-svrbsctl set channel 2 aa:bb:cc:dd:ee:ff
+svrbsctl set channel 2 AA:BB:CC:DD:EE:FF
 # Turn on 'identify' mode (blinking white LED)
-svrbsctl set identify on 00:11:22:33:44:55 aa:bb:cc:dd:ee:ff
+svrbsctl set identify on 00:11:22:33:44:55 AA:BB:CC:DD:EE:FF
 # Set power mode to 'sleeping' (motors and lasers off)
-svrbsctl set power sleeping 00:11:22:33:44:55 aa:bb:cc:dd:ee:ff
+svrbsctl set power sleeping 00:11:22:33:44:55 AA:BB:CC:DD:EE:FF
 ```
 
 The `set` commands will not print any output unless an error occurs.
@@ -73,5 +78,4 @@ For more details, check `svrbsctl --help`.
 
 ## Caveats
 
-* This project relies heavily on the `winrt-rs` crate. As such, Linux/bluez is not supported. I currently don't plan on supporting Linux until there's a good cross-platform BLE crate.
 * Updating the base station firmware is not supported. Please use the official SteamVR tool for that.
