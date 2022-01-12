@@ -4,8 +4,6 @@ use uuid::Uuid;
 
 pub const NAME_PREFIX: &str = "LHB-";
 
-// btleplug currently does not use services
-#[allow(dead_code)]
 pub const UUID_SERVICE: Uuid = Uuid::from_bytes([
     0x00, 0x00, 0x15, 0x23,
     0x12, 0x12,

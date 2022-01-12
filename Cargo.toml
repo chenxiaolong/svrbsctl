@@ -5,12 +5,15 @@ authors = ["Andrew Gunnerson <chillermillerlong@hotmail.com>"]
 edition = "2018"
 
 [dependencies]
-btleplug = "0.8.0"
-clap = "3.0.0-beta.2"
-futures = "0.3.16"
-thiserror = "1.0.22"
+btleplug = "0.9.0"
+futures = "0.3.19"
+thiserror = "1.0.30"
 uuid = "0.8.2"
 
+[dependencies.clap]
+version = "3.0.7"
+features = ["derive"]
+
 [dependencies.tokio]
-version = "1.9.0"
+version = "1.15.0"
 features = ["rt-multi-thread", "macros"]

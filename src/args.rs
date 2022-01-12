@@ -1,9 +1,9 @@
 use btleplug::api::BDAddr;
-use clap::Clap;
+use clap::{ArgEnum, Parser};
 
 use crate::device::PowerState;
 
-#[derive(Clap, Clone, Copy, Eq, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, Eq, PartialEq, Parser)]
 pub enum ArgOnOffState {
     Off,
     On,
@@ -15,7 +15,7 @@ impl From<ArgOnOffState> for bool {
     }
 }
 
-#[derive(Clap, Clone, Copy, Eq, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, Eq, PartialEq, Parser)]
 pub enum ArgPowerState {
     Sleeping,
     Standby,
@@ -33,7 +33,7 @@ impl From<ArgPowerState> for PowerState {
 }
 
 /// A simple tool for querying and setting the state of SteamVR base stations.
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(author, about, version)]
 pub struct Opts {
     #[clap(subcommand)]
@@ -43,7 +43,7 @@ pub struct Opts {
     pub timeout: u64,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 pub enum Subcommand {
     /// Discover SteamVR base stations
     Discover,
@@ -56,13 +56,13 @@ pub enum Subcommand {
     Set(CommandSet),
 }
 
-#[derive(Clap)]
+#[derive(ArgEnum, Clone, Copy, Eq, PartialEq, Parser)]
 pub enum GetStateType {
     Channel,
     Power,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 pub struct CommandGet {
     /// The type of state to query
     #[clap(arg_enum)]
@@ -72,13 +72,13 @@ pub struct CommandGet {
     pub addrs: Vec<BDAddr>,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 pub struct CommandSet {
     #[clap(subcommand)]
     pub subcommand: SubcommandSet,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 pub enum SubcommandSet {
     /// Set the RF channel used by the base stations.
     Channel(CommandSetChannel),
@@ -90,7 +90,7 @@ pub enum SubcommandSet {
     Power(CommandSetPower),
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 pub struct CommandSetChannel {
     /// Channel number [valid range: 0..15 inclusive]
     pub channel: u8,
@@ -99,7 +99,7 @@ pub struct CommandSetChannel {
     pub addrs: Vec<BDAddr>,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 pub struct CommandSetIdentify {
     /// 'identify' mode state
     #[clap(arg_enum)]
@@ -109,7 +109,7 @@ pub struct CommandSetIdentify {
     pub addrs: Vec<BDAddr>,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 pub struct CommandSetPower {
     /// Power state
     #[clap(arg_enum)]

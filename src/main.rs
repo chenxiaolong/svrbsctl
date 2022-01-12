@@ -5,10 +5,10 @@ use std::{
 };
 
 use btleplug::{
-    api::{Central, CentralEvent, Manager as _, Peripheral as _},
+    api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter},
     platform::{Manager, Peripheral},
 };
-use clap::Clap;
+use clap::Parser;
 use futures::stream::{FuturesUnordered, StreamExt};
 
 use args::{GetStateType, Opts, Subcommand, SubcommandSet};
@@ -111,7 +111,10 @@ async fn main_wrapper() -> Result<(), MainError> {
         .ok_or(Error::NoBluetoothAdapter)?;
 
     let mut events = adapter.events().await?;
-    adapter.start_scan().await?;
+    let filter = ScanFilter {
+        services: vec![constants::UUID_SERVICE],
+    };
+    adapter.start_scan(filter).await?;
 
     let mut tasks = FuturesUnordered::new();
     let mut remaining = limit.map(|s| s.iter().copied().collect::<HashSet<_>>());
@@ -129,9 +132,10 @@ async fn main_wrapper() -> Result<(), MainError> {
             // Received bluetooth event
             e = events.next() => {
                 match e {
-                    Some(CentralEvent::DeviceDiscovered(addr)) => {
-                        let peripheral = adapter.peripheral(addr).await
+                    Some(CentralEvent::DeviceDiscovered(id)) => {
+                        let peripheral = adapter.peripheral(&id).await
                             .expect("Can't get peripheral for discovered device");
+                        let addr = peripheral.address();
 
                         if let Some(r) = &mut remaining {
                             if !r.remove(&addr) {

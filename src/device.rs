@@ -79,7 +79,7 @@ impl BaseStationDevice {
     pub async fn connect(peripheral: Peripheral) -> Result<Self> {
         peripheral.connect().await?;
 
-        peripheral.discover_characteristics().await?;
+        peripheral.discover_services().await?;
 
         let mut c_identify = None;
         let mut c_mode = None;
