@@ -42,8 +42,7 @@ async fn process_device(
     opts: Arc<Opts>,
 ) -> Result<(), error::Error> {
     let name = match peripheral.properties().await?
-        .map(|p| p.local_name)
-        .flatten()
+        .and_then(|p| p.local_name)
     {
         Some(n) => n,
         None => return Err(Error::UnknownDevice),
@@ -104,7 +103,7 @@ async fn main_wrapper() -> Result<(), MainError> {
                 SubcommandSet::Power(sargs) => Some(&sargs.addrs),
             }
         },
-    }.map(|l| l.as_slice());
+    }.map(Vec::as_slice);
 
     let manager = Manager::new().await?;
     let adapters = manager.adapters().await?;

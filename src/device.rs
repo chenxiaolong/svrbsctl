@@ -123,7 +123,7 @@ impl BaseStationDevice {
     }
 
     pub async fn set_identify(&self, state: bool) -> Result<()> {
-        self.write_values(&self.c_identify, &[state as u8]).await
+        self.write_values(&self.c_identify, &[u8::from(state)]).await
     }
 
     pub async fn get_channel(&self) -> Result<u8> {
@@ -145,9 +145,7 @@ impl BaseStationDevice {
     }
 
     pub async fn get_power_state(&self) -> Result<PowerState> {
-        let value = self.read_value(&self.c_power).await?;
-
-        Ok(value.try_into()?)
+        self.read_value(&self.c_power).await?.try_into()
     }
 
     pub async fn set_power_state(&self, state: PowerState) -> Result<()> {
