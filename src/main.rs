@@ -9,7 +9,8 @@ use btleplug::{
     platform::{Manager, Peripheral},
 };
 use clap::Parser;
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::stream::StreamExt;
+use tokio::task::JoinSet;
 
 use args::{GetStateType, Opts, Subcommand, SubcommandSet};
 use device::BaseStationDevice;
@@ -41,8 +42,7 @@ async fn process_device(
     opts: Arc<Opts>,
 ) -> Result<(), error::Error> {
     let name = match peripheral.properties().await?
-        .map(|p| p.local_name)
-        .flatten()
+        .and_then(|p| p.local_name)
     {
         Some(n) => n,
         None => return Err(Error::UnknownDevice),
@@ -103,7 +103,7 @@ async fn main_wrapper() -> Result<(), MainError> {
                 SubcommandSet::Power(sargs) => Some(&sargs.addrs),
             }
         },
-    }.map(|l| l.as_slice());
+    }.map(Vec::as_slice);
 
     let manager = Manager::new().await?;
     let adapters = manager.adapters().await?;
@@ -116,7 +116,7 @@ async fn main_wrapper() -> Result<(), MainError> {
     };
     adapter.start_scan(filter).await?;
 
-    let mut tasks = FuturesUnordered::new();
+    let mut tasks = JoinSet::new();
     let mut remaining = limit.map(|s| s.iter().copied().collect::<HashSet<_>>());
     let discovery_timer = tokio::time::sleep(timeout);
     tokio::pin!(discovery_timer);
@@ -146,7 +146,7 @@ async fn main_wrapper() -> Result<(), MainError> {
 
                         let opts = opts.clone();
 
-                        tasks.push(tokio::spawn(async move {
+                        tasks.spawn(async move {
                             let is_discovery = matches!(opts.subcommand, Subcommand::Discover);
 
                             // Returns a simple bool because btleplug::Error is not Send + Sync
@@ -163,7 +163,7 @@ async fn main_wrapper() -> Result<(), MainError> {
                                     }
                                 }
                             }
-                        }));
+                        });
 
                         // All user-provided addresses have been discovered
                         if let Some(r) = &mut remaining {
@@ -184,7 +184,7 @@ async fn main_wrapper() -> Result<(), MainError> {
 
     let mut error_occurred = false;
 
-    while let Some(r) = tasks.next().await {
+    while let Some(r) = tasks.join_next().await {
         match r {
             Ok(true) => {}
             Ok(false) => error_occurred = true,
