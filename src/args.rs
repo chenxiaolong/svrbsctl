@@ -1,9 +1,9 @@
 use btleplug::api::BDAddr;
-use clap::{ArgEnum, Parser};
+use clap::{Parser, ValueEnum};
 
 use crate::device::PowerState;
 
-#[derive(ArgEnum, Clone, Copy, Eq, PartialEq, Parser)]
+#[derive(Clone, Copy, Eq, PartialEq, Parser, ValueEnum)]
 pub enum ArgOnOffState {
     Off,
     On,
@@ -15,7 +15,7 @@ impl From<ArgOnOffState> for bool {
     }
 }
 
-#[derive(ArgEnum, Clone, Copy, Eq, PartialEq, Parser)]
+#[derive(Clone, Copy, Eq, PartialEq, Parser, ValueEnum)]
 pub enum ArgPowerState {
     Sleeping,
     Standby,
@@ -56,7 +56,7 @@ pub enum Subcommand {
     Set(CommandSet),
 }
 
-#[derive(ArgEnum, Clone, Copy, Eq, PartialEq, Parser)]
+#[derive(Clone, Copy, Eq, PartialEq, Parser, ValueEnum)]
 pub enum GetStateType {
     Channel,
     Power,
@@ -65,10 +65,10 @@ pub enum GetStateType {
 #[derive(Parser)]
 pub struct CommandGet {
     /// The type of state to query
-    #[clap(arg_enum)]
+    #[clap(value_enum)]
     pub state_type: GetStateType,
     /// Bluetooth addresses
-    #[clap(name = "addr", required = true, min_values = 1)]
+    #[clap(name = "addr", required = true, num_args = 1..)]
     pub addrs: Vec<BDAddr>,
 }
 
@@ -95,26 +95,26 @@ pub struct CommandSetChannel {
     /// Channel number [valid range: 0..15 inclusive]
     pub channel: u8,
     /// Bluetooth addresses
-    #[clap(name = "addr", required = true, min_values = 1)]
+    #[clap(name = "addr", required = true, num_args = 1..)]
     pub addrs: Vec<BDAddr>,
 }
 
 #[derive(Parser)]
 pub struct CommandSetIdentify {
     /// 'identify' mode state
-    #[clap(arg_enum)]
+    #[clap(value_enum)]
     pub state: ArgOnOffState,
     /// Bluetooth addresses
-    #[clap(name = "addr", required = true, min_values = 1)]
+    #[clap(name = "addr", required = true, num_args = 1..)]
     pub addrs: Vec<BDAddr>,
 }
 
 #[derive(Parser)]
 pub struct CommandSetPower {
     /// Power state
-    #[clap(arg_enum)]
+    #[clap(value_enum)]
     pub state: ArgPowerState,
     /// Bluetooth addresses
-    #[clap(name = "addr", required = true, min_values = 1)]
+    #[clap(name = "addr", required = true, num_args = 1..)]
     pub addrs: Vec<BDAddr>,
 }
