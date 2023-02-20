@@ -24,7 +24,7 @@ impl fmt::Display for PowerState {
             Self::Standby => "standby",
             Self::Awake => "awake",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
