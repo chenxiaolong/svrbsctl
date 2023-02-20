@@ -41,12 +41,9 @@ async fn process_device(
     peripheral: Peripheral,
     opts: Arc<Opts>,
 ) -> Result<(), error::Error> {
-    let name = match peripheral.properties().await?
-        .and_then(|p| p.local_name)
-    {
-        Some(n) => n,
-        None => return Err(Error::UnknownDevice),
-    };
+
+    let Some(name) = peripheral.properties().await?
+        .and_then(|p| p.local_name) else { return Err(Error::UnknownDevice) };
 
     // Filter out non-base-stations based on the name to avoid unnecessary connections
     if !BaseStationDevice::is_likely_base_station(&name) {
@@ -58,17 +55,17 @@ async fn process_device(
 
     match &opts.subcommand {
         Subcommand::Discover => {
-            println!("{}={}", addr, name);
+            println!("{addr}={name}");
         }
         Subcommand::Get(args) => {
             match args.state_type {
                 GetStateType::Channel => {
                     let channel = device.get_channel().await?;
-                    println!("{}={}", addr, channel);
+                    println!("{addr}={channel}");
                 }
                 GetStateType::Power => {
                     let state = device.get_power_state().await?;
-                    println!("{}={}", addr, state);
+                    println!("{addr}={state}");
                 }
             }
         }
@@ -158,7 +155,7 @@ async fn main_wrapper() -> Result<(), MainError> {
                                     if matches!(e, Error::UnknownDevice) && is_discovery {
                                         true
                                     } else {
-                                        eprintln!("[{}] {}", addr, e);
+                                        eprintln!("[{addr}] {e}");
                                         false
                                     }
                                 }
@@ -189,7 +186,7 @@ async fn main_wrapper() -> Result<(), MainError> {
             Ok(true) => {}
             Ok(false) => error_occurred = true,
             Err(e) => {
-                eprintln!("Unexpected panic: {}", e);
+                eprintln!("Unexpected panic: {e}");
                 error_occurred = true;
             }
         }
@@ -198,7 +195,7 @@ async fn main_wrapper() -> Result<(), MainError> {
     if let Some(addrs) = remaining {
         if !addrs.is_empty() {
             for addr in addrs {
-                eprintln!("[{}] Could not find device", addr);
+                eprintln!("[{addr}] Could not find device");
             }
             error_occurred = true;
         }
@@ -217,7 +214,7 @@ async fn main() {
         Ok(_) => {}
         Err(e) => {
             match e {
-                MainError::Unprinted(e) => eprintln!("{}", e),
+                MainError::Unprinted(e) => eprintln!("{e}"),
                 MainError::AlreadyPrinted => {}
             }
             std::process::exit(1);
