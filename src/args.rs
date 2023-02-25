@@ -39,7 +39,7 @@ pub struct Opts {
     #[clap(subcommand)]
     pub subcommand: Subcommand,
     /// Bluetooth scanning timeout (in seconds)
-    #[clap(short, long, default_value = "3")]
+    #[clap(short, long, default_value = "10", global = true)]
     pub timeout: u64,
 }
 
