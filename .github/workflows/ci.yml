@@ -10,31 +10,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CARGO_TERM_COLOR: always
+      RUSTFLAGS: -C strip=symbols
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os:
+          - windows-latest
+          - ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Get Rust LLVM target triple
+      - name: Get Rust target triple
         id: get_target
         shell: bash
         run: |
           echo -n 'name=' >> "${GITHUB_OUTPUT}"
-          RUSTC_BOOTSTRAP=1 rustc -Z unstable-options --print target-spec-json \
-              | jq -r '."llvm-target"' \
-              >> "${GITHUB_OUTPUT}"
+          rustc -vV | sed -n 's|host: ||p' >> "${GITHUB_OUTPUT}"
 
       - name: Install build dependencies
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt install -y libdbus-1-dev
-
-      - name: Install clippy
-        run: rustup component add clippy
 
       - name: Run clippy checks in debug mode
         env:
@@ -43,10 +41,10 @@ jobs:
           cargo clippy --workspace -- -D warnings
 
       - name: Build in debug mode
-        run: cargo build --verbose
+        run: cargo build
 
       - name: Archive artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: svrbsctl-${{ steps.get_target.outputs.name }}
           path: |
