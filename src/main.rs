@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    process::ExitCode,
     sync::Arc,
     time::Duration,
 };
@@ -209,15 +210,15 @@ async fn main_wrapper() -> Result<(), MainError> {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     match main_wrapper().await {
-        Ok(_) => {}
+        Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
             match e {
                 MainError::Unprinted(e) => eprintln!("{e}"),
                 MainError::AlreadyPrinted => {}
             }
-            std::process::exit(1);
+            ExitCode::FAILURE
         }
     }
 }
