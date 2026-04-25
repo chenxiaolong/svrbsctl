@@ -79,3 +79,7 @@ For more details, check `svrbsctl --help`.
 ## Caveats
 
 * Updating the base station firmware is not supported. Please use the official SteamVR tool for that.
+
+## License
+
+svrbsctl is licensed under GPL-3.0-only. Please see [`LICENSE`](./LICENSE) for the full license text.
