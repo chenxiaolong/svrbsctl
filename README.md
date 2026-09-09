@@ -1,3 +1,5 @@
+**2026-09-09 update**: This project is no longer in development because I never found myself actually using it. It should continue working without any updates since Valve never changed how the protocol worked throughout the life of the device.
+
 # SteamVR Base Station Control
 
 `svrbsctl` is a simple tool for controlling the operating state of a SteamVR 2.0 Base Station. It is currently able query and set the RF channel and power state. The 'identify' mode (blinking white LED) can also be set, but cannot be queried.
